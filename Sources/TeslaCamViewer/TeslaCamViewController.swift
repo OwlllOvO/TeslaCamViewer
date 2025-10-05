@@ -320,6 +320,11 @@ class TeslaCamViewController: NSViewController {
         playerLayers.removeAll()
         players.removeAll()
         
+        // Remove old text label layers
+        gridView.layer?.sublayers?.filter { $0 is CATextLayer && $0.name?.starts(with: "cameraLabel_") == true }.forEach {
+            $0.removeFromSuperlayer()
+        }
+        
         // Create players for each camera
         for (_, cameraView) in cameraViews.enumerated() {
             let player = AVPlayer()
@@ -364,6 +369,10 @@ class TeslaCamViewController: NSViewController {
         let gridRect = gridView.bounds
         let cols = 3
         let rows = 2
+        
+        // Label height at bottom of each cell
+        let labelHeight: CGFloat = 30
+        
         let cellWidth = gridRect.width / CGFloat(cols)
         let cellHeight = gridRect.height / CGFloat(rows)
         
@@ -388,6 +397,10 @@ class TeslaCamViewController: NSViewController {
             cameraToLayerMap[cameraView.name] = index
         }
         
+        // Wrap all layout updates in a single CATransaction for synchronized updates
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        
         // Position each player layer at its fixed location
         for (cameraName, position) in cameraPositions {
             if let layerIndex = cameraToLayerMap[cameraName] {
@@ -397,39 +410,37 @@ class TeslaCamViewController: NSViewController {
                 let x = CGFloat(position.col) * cellWidth
                 let y = gridRect.height - CGFloat(position.row + 1) * cellHeight // Flip Y coordinate
                 
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                layer.frame = CGRect(x: x, y: y, width: cellWidth, height: cellHeight)
-                CATransaction.commit()
+                // Video layer takes most of the cell, leaving room for label at bottom
+                let videoHeight = cellHeight - labelHeight
+                
+                layer.frame = CGRect(x: x, y: y + labelHeight, width: cellWidth, height: videoHeight)
                 
                 // Find or create text layer for camera name
                 var textLayer: CATextLayer
-                if let existingTextLayer = layer.sublayers?.first(where: { $0 is CATextLayer }) as? CATextLayer {
+                if let existingTextLayer = gridView.layer?.sublayers?.first(where: { 
+                    $0 is CATextLayer && $0.name == "cameraLabel_\(cameraName)" 
+                }) as? CATextLayer {
                     textLayer = existingTextLayer
                 } else {
                     textLayer = CATextLayer()
                     textLayer.string = formatCameraName(cameraView.name)
                     textLayer.foregroundColor = NSColor.white.cgColor
-                    textLayer.backgroundColor = NSColor.black.withAlphaComponent(0.7).cgColor
+                    textLayer.backgroundColor = NSColor.black.cgColor
                     textLayer.alignmentMode = .center
-                    textLayer.name = "cameraLabel"
-                    layer.addSublayer(textLayer)
+                    textLayer.name = "cameraLabel_\(cameraName)"
+                    gridView.layer?.addSublayer(textLayer)
                 }
                 
-                // Update text layer properties
-                textLayer.fontSize = 16
+                // Update text layer properties and position
+                textLayer.fontSize = 14
                 textLayer.contentsScale = scale  // Fix blurry text on Retina
-                
-                // Position label at bottom of cell
-                let labelHeight: CGFloat = 28
-                let labelWidth = cellWidth - 10
                 textLayer.frame = CGRect(
-                    x: 5,
-                    y: 5,  // Position at bottom (in flipped coordinate system)
-                    width: labelWidth,
+                    x: x,
+                    y: y,  // Position at bottom of cell
+                    width: cellWidth,
                     height: labelHeight
                 )
-                textLayer.cornerRadius = 4
+                textLayer.cornerRadius = 0
                 
                 // Make sure the layer is visible
                 layer.isHidden = false
@@ -438,16 +449,21 @@ class TeslaCamViewController: NSViewController {
                 // The empty space will show the background color
             }
         }
+        
+        CATransaction.commit()
     }
     
     override func viewDidLayout() {
         super.viewDidLayout()
+        
+        // Use CATransaction to ensure immediate, synchronized updates
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         layoutPlayerLayers()
+        CATransaction.commit()
         
         // Update marker position after layout is complete
-        DispatchQueue.main.async { [weak self] in
-            self?.updateEventMarkerPosition()
-        }
+        updateEventMarkerPosition()
     }
     
     @objc private func togglePlayPause() {
