@@ -1,0 +1,35 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+
+# App bundle (built artifact)
+TeslaCamViewer.app/
+
+# macOS
+.DS_Store
+*.xcuserstate
+
+# Build artifacts
+DerivedData/
+build/
+
+# Compiled files
+*.o
+*.swiftmodule
+*.swiftdoc
+
+# Test videos (don't commit large video files)
+test_videos/
+sample_data/
+*.mp4
+*.mov
+
+# Xcode
+xcuserdata/
+*.xcscmblueprint
+
+# Other
+.vscode/
+.idea/
