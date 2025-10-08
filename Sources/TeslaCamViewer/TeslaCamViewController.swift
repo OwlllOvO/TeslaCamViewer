@@ -191,7 +191,7 @@ class TeslaCamViewController: NSViewController {
             // Custom speed field
             customSpeedField.trailingAnchor.constraint(equalTo: speedControl.leadingAnchor, constant: -10),
             customSpeedField.centerYAnchor.constraint(equalTo: playPauseButton.centerYAnchor),
-            customSpeedField.widthAnchor.constraint(equalToConstant: 50),
+            customSpeedField.widthAnchor.constraint(equalToConstant: 60),
             
             // Speed control
             speedControl.trailingAnchor.constraint(equalTo: controlsView.trailingAnchor, constant: -20),
