@@ -2,6 +2,10 @@
 
 A synchronized player specifically designed for Tesla dashcam videos, supporting real-time synchronized playback of 6 camera angles.
 
+## 📸 Screenshot
+
+![TeslaCam Viewer Interface](docs/app-interface.png)
+
 ## 🚀 Quick Start
 
 **Get started in just 3 steps:**
