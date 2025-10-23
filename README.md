@@ -4,7 +4,7 @@ A synchronized player specifically designed for Tesla dashcam videos, supporting
 
 ## 📸 Screenshot
 
-![TeslaCam Viewer Interface](docs/app-interface.png)
+![TeslaCam Viewer Interface](docs/teslamate-ui.jpg)
 
 ## 🚀 Quick Start
 
