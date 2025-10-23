@@ -4,7 +4,7 @@ import AVKit
 
 // MARK: - Main View Controller
 
-class TeslaCamViewController: NSViewController {
+class TeslaCamViewController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     private var cameraViews: [CameraView] = []
     private var players: [AVPlayer] = []
     private var playerLayers: [AVPlayerLayer] = []
@@ -13,6 +13,14 @@ class TeslaCamViewController: NSViewController {
     private var isSynchronizing = false
     
     // UI Elements
+    // Split layout
+    private let splitView = NSSplitView()
+    private let sidebarContainer = NSView()
+    private let rightContainer = NSView()
+    private let sidebarScrollView = NSScrollView()
+    private let sidebarTableView = NSTableView()
+    
+    // Existing right-side elements
     private let gridView = NSView()
     private let controlsView = NSView()
     private let playPauseButton = NSButton()
@@ -32,6 +40,18 @@ class TeslaCamViewController: NSViewController {
     private var eventTimestamp: Date?
     private var firstSegmentTimestamp: Date?
     
+    // Root directory & events list (to be populated in next step)
+    private var rootDirectoryURL: URL?
+    private var eventFolders: [URL] = []
+    
+    // Sidebar filter and empty state
+    private let searchField = NSSearchField()
+    private var filteredEventFolders: [URL] = []
+    private var searchDebounceTimer: Timer?
+    
+    // Empty state view (shown when no events)
+    private var emptyStateView: NSView?
+    
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 1400, height: 900))
         view.wantsLayer = true
@@ -44,15 +64,36 @@ class TeslaCamViewController: NSViewController {
     }
     
     private func setupUI() {
+        // Setup split view (sidebar + right container)
+        splitView.translatesAutoresizingMaskIntoConstraints = false
+        splitView.isVertical = true
+        splitView.dividerStyle = .thin
+        view.addSubview(splitView)
+        
+        // Sidebar container
+        sidebarContainer.translatesAutoresizingMaskIntoConstraints = false
+        splitView.addArrangedSubview(sidebarContainer)
+        
+        // Right container
+        rightContainer.translatesAutoresizingMaskIntoConstraints = false
+        splitView.addArrangedSubview(rightContainer)
+        
+        // Fix sidebar width
+        sidebarContainer.widthAnchor.constraint(equalToConstant: 260).isActive = true
+        
+        // Setup sidebar (scroll + table)
+        setupSidebar()
+        
         // Setup grid view for 6 cameras (2x3 layout)
         gridView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(gridView)
+        gridView.wantsLayer = true
+        rightContainer.addSubview(gridView)
         
         // Setup controls view
         controlsView.translatesAutoresizingMaskIntoConstraints = false
         controlsView.wantsLayer = true
         controlsView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-        view.addSubview(controlsView)
+        rightContainer.addSubview(controlsView)
         
         // Open folder button
         openFolderButton.title = "Open Folder"
@@ -139,16 +180,22 @@ class TeslaCamViewController: NSViewController {
     
     private func setupLayoutConstraints() {
         NSLayoutConstraint.activate([
-            // Grid view (top area for videos)
-            gridView.topAnchor.constraint(equalTo: view.topAnchor),
-            gridView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            gridView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            // Split view fills the window content
+            splitView.topAnchor.constraint(equalTo: view.topAnchor),
+            splitView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            splitView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            splitView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            
+            // Grid view (top area for videos) inside right container
+            gridView.topAnchor.constraint(equalTo: rightContainer.topAnchor),
+            gridView.leadingAnchor.constraint(equalTo: rightContainer.leadingAnchor),
+            gridView.trailingAnchor.constraint(equalTo: rightContainer.trailingAnchor),
             gridView.bottomAnchor.constraint(equalTo: controlsView.topAnchor),
             
-            // Controls view (bottom bar)
-            controlsView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            controlsView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            controlsView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            // Controls view (bottom bar) inside right container
+            controlsView.leadingAnchor.constraint(equalTo: rightContainer.leadingAnchor),
+            controlsView.trailingAnchor.constraint(equalTo: rightContainer.trailingAnchor),
+            controlsView.bottomAnchor.constraint(equalTo: rightContainer.bottomAnchor),
             controlsView.heightAnchor.constraint(equalToConstant: 100),
             
             // Open folder button
@@ -205,11 +252,47 @@ class TeslaCamViewController: NSViewController {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.message = "Select Tesla Dashcam Event Folder"
+        panel.message = "Select TeslaCam root folder (SavedClips/SentryClips) or a specific event folder"
         
         panel.begin { [weak self] response in
-            if response == .OK, let url = panel.url {
-                self?.loadFolder(url: url)
+            guard response == .OK, let url = panel.url, let self = self else { return }
+            
+            // If user selected an event folder directly, load it and populate sidebar from its parent
+            if self.isEventFolder(url: url) {
+                self.rootDirectoryURL = url.deletingLastPathComponent()
+                self.eventFolders = self.scanEventFolders(in: self.rootDirectoryURL!)
+                // Sync filtered list to data source
+                self.filteredEventFolders = self.eventFolders
+                self.sidebarTableView.reloadData()
+                
+                // Try to select the current folder in sidebar if present; otherwise select first (auto)
+                if let idx = self.filteredEventFolders.firstIndex(of: url) {
+                    self.sidebarTableView.selectRowIndexes(IndexSet(integer: idx), byExtendingSelection: false)
+                    self.loadFolder(url: url)
+                } else if let first = self.filteredEventFolders.first {
+                    self.sidebarTableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+                    self.loadFolder(url: first)
+                } else {
+                    self.showEmptyState()
+                    self.showAlert(message: "No valid TeslaCam event folders found under \(self.rootDirectoryURL!.lastPathComponent).")
+                }
+            } else {
+                // Treat selected URL as root directory; scan its event subfolders
+                self.rootDirectoryURL = url
+                self.eventFolders = self.scanEventFolders(in: url)
+                // Sync filtered list to data source
+                self.filteredEventFolders = self.eventFolders
+                self.sidebarTableView.reloadData()
+                
+                if let first = self.filteredEventFolders.first {
+                    // Auto select newest (sorted倒序) and load
+                    self.sidebarTableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+                    self.loadFolder(url: first)
+                    self.hideEmptyState()
+                } else {
+                    self.showEmptyState()
+                    self.showAlert(message: "No valid TeslaCam event folders found under selected directory.")
+                }
             }
         }
     }
@@ -818,8 +901,8 @@ class TeslaCamViewController: NSViewController {
             timeObserver = nil
         }
         
-        // Remove notifications
-        NotificationCenter.default.removeObserver(self)
+        // Remove only AVPlayer item notifications; keep other observers intact
+        NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
         
         // Stop and remove players
         players.forEach { $0.pause(); $0.replaceCurrentItem(with: nil) }
@@ -830,6 +913,216 @@ class TeslaCamViewController: NSViewController {
         playerLayers.removeAll()
         
         cameraViews.removeAll()
+    }
+    
+    // MARK: - Sidebar
+    
+    private func setupSidebar() {
+        // Configure search field
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.placeholderString = "Filter Events（e.g. 2025-10-14_21-06-15）"
+        searchField.sendsSearchStringImmediately = true
+        searchField.target = self
+        searchField.action = #selector(searchFieldChanged)
+        sidebarContainer.addSubview(searchField)
+        
+        // Configure scroll view
+        sidebarScrollView.translatesAutoresizingMaskIntoConstraints = false
+        sidebarScrollView.borderType = .noBorder
+        sidebarScrollView.hasVerticalScroller = true
+        sidebarScrollView.hasHorizontalScroller = false
+        sidebarContainer.addSubview(sidebarScrollView)
+        
+        // Configure table view
+        if sidebarTableView.tableColumns.isEmpty {
+            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("EventColumn"))
+            column.title = "Events"
+            sidebarTableView.addTableColumn(column)
+        }
+        sidebarTableView.headerView = nil
+        sidebarTableView.allowsEmptySelection = true
+        sidebarTableView.usesAlternatingRowBackgroundColors = true
+        sidebarTableView.delegate = self
+        sidebarTableView.dataSource = self
+        sidebarTableView.rowHeight = 30
+        
+
+        
+        // Embed table in scroll view
+        sidebarScrollView.documentView = sidebarTableView
+        
+        // Layout: search at top, table (scroll) fills remaining
+        NSLayoutConstraint.activate([
+            searchField.topAnchor.constraint(equalTo: sidebarContainer.topAnchor, constant: 8),
+            searchField.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor, constant: 8),
+            searchField.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor, constant: -8),
+            
+            sidebarScrollView.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
+            sidebarScrollView.leadingAnchor.constraint(equalTo: sidebarContainer.leadingAnchor),
+            sidebarScrollView.trailingAnchor.constraint(equalTo: sidebarContainer.trailingAnchor),
+            sidebarScrollView.bottomAnchor.constraint(equalTo: sidebarContainer.bottomAnchor)
+        ])
+    }
+    
+    // MARK: - Sidebar DataSource/Delegate
+    
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        return filteredEventFolders.count
+    }
+    
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        let identifier = NSUserInterfaceItemIdentifier("EventCell")
+        let cell: NSTableCellView
+        if let reused = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView {
+            cell = reused
+        } else {
+            cell = NSTableCellView()
+            cell.identifier = identifier
+            let textField = NSTextField(labelWithString: "")
+            textField.translatesAutoresizingMaskIntoConstraints = false
+            textField.lineBreakMode = .byTruncatingMiddle
+            cell.addSubview(textField)
+            cell.textField = textField
+            NSLayoutConstraint.activate([
+                textField.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
+                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
+                textField.topAnchor.constraint(equalTo: cell.topAnchor, constant: 6),
+                textField.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -6)
+            ])
+        }
+        if row < filteredEventFolders.count {
+            cell.textField?.stringValue = filteredEventFolders[row].lastPathComponent
+        } else {
+            cell.textField?.stringValue = ""
+        }
+        return cell
+    }
+    
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        let selected = sidebarTableView.selectedRow
+        guard selected >= 0, selected < filteredEventFolders.count else { return }
+        let url = filteredEventFolders[selected]
+        hideEmptyState()
+        print("📁 Sidebar didSelect row=\(selected), url=\(url.lastPathComponent)")
+        // Load selected event folder into right-side player
+        loadFolder(url: url)
+    }
+    
+
+    
+    // MARK: - Root scan helpers
+    
+    private func scanEventFolders(in root: URL) -> [URL] {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey], options: [.skipsHiddenFiles]) else {
+            return []
+        }
+        let pattern = #"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$"#
+        let nameRegex = try? NSRegularExpression(pattern: pattern)
+        var result: [URL] = []
+        
+        for item in items {
+            // Must be directory and name matches pattern
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: item.path, isDirectory: &isDir), isDir.boolValue {
+                let name = item.lastPathComponent
+                if let regex = nameRegex,
+                   regex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil {
+                    // Optional: ensure it contains mp4 files to avoid empty folders
+                    if isEventFolder(url: item) {
+                        result.append(item)
+                    }
+                }
+            }
+        }
+        // Sort by folder name (lexicographic) in descending order: newest first
+        result.sort { $0.lastPathComponent > $1.lastPathComponent }
+        return result
+    }
+    
+    private func isEventFolder(url: URL) -> Bool {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) else {
+            return false
+        }
+        return files.contains { $0.pathExtension.lowercased() == "mp4" }
+    }
+    
+    // MARK: - Search & Empty State
+    
+    @objc private func searchFieldChanged() {
+        // Cancel previous debounce
+        searchDebounceTimer?.invalidate()
+        // Debounce to avoid frequent reloads during typing
+        searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            let query = self.searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            // Filter on background queue
+            DispatchQueue.global(qos: .userInitiated).async {
+                let filtered: [URL]
+                if query.isEmpty {
+                    filtered = self.eventFolders
+                } else {
+                    filtered = self.eventFolders.filter { $0.lastPathComponent.lowercased().contains(query) }
+                }
+                // Apply on main queue once
+                DispatchQueue.main.async {
+                    self.filteredEventFolders = filtered
+                    self.sidebarTableView.reloadData()
+                    // Empty state toggle only (no auto-select/load during typing to avoid jank)
+                    if filtered.isEmpty {
+                        self.showEmptyState()
+                    } else {
+                        self.hideEmptyState()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func showEmptyState() {
+        guard emptyStateView == nil else { return }
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        
+        let title = NSTextField(labelWithString: "未找到可播放的事件目录")
+        title.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
+        title.textColor = .secondaryLabelColor
+        title.alignment = .center
+        title.translatesAutoresizingMaskIntoConstraints = false
+        
+        let subtitle = NSTextField(labelWithString: "请点击左下角 Open Folder 选择 TeslaCam 根目录（SavedClips 或 SentryClips），或直接选择具体事件目录。")
+        subtitle.font = NSFont.systemFont(ofSize: 12)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.alignment = .center
+        subtitle.lineBreakMode = .byWordWrapping
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
+        
+        container.addSubview(title)
+        container.addSubview(subtitle)
+        rightContainer.addSubview(container)
+        
+        NSLayoutConstraint.activate([
+            container.centerXAnchor.constraint(equalTo: rightContainer.centerXAnchor),
+            container.centerYAnchor.constraint(equalTo: rightContainer.centerYAnchor, constant: -40),
+            container.widthAnchor.constraint(lessThanOrEqualTo: rightContainer.widthAnchor, multiplier: 0.7),
+            
+            title.topAnchor.constraint(equalTo: container.topAnchor),
+            title.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            title.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            
+            subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
+            subtitle.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            subtitle.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            subtitle.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        ])
+        
+        emptyStateView = container
+    }
+    
+    private func hideEmptyState() {
+        emptyStateView?.removeFromSuperview()
+        emptyStateView = nil
     }
     
     deinit {
