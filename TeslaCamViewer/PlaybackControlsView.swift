@@ -7,15 +7,28 @@ struct PlaybackControlsView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            progressBar
-                .padding(.horizontal, 16)
+            HStack(spacing: 8) {
+                Text(formatTime(controller.globalProgress))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, alignment: .trailing)
 
-            HStack(spacing: 16) {
+                progressBar
+
+                Text(formatTime(controller.globalDuration))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 52, alignment: .leading)
+            }
+            .padding(.horizontal, 16)
+
+            ZStack {
                 transportControls
-                Spacer()
-                timeDisplay
-                Spacer()
-                speedControls
+
+                HStack {
+                    Spacer()
+                    speedControls
+                }
             }
             .padding(.horizontal, 16)
         }
@@ -108,12 +121,6 @@ struct PlaybackControlsView: View {
         }
         .buttonStyle(.borderless)
         .help(help)
-    }
-
-    private var timeDisplay: some View {
-        Text("\(formatTime(controller.globalProgress)) / \(formatTime(controller.globalDuration))")
-            .font(.system(.body, design: .monospaced))
-            .foregroundStyle(.secondary)
     }
 
     private var speedControls: some View {

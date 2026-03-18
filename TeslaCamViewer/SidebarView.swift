@@ -5,6 +5,31 @@ struct SidebarView: View {
     @Binding var selectedEvent: TeslaCamEvent?
     let isLoading: Bool
 
+    private var hasSections: Bool {
+        events.contains { $0.sourceFolder != nil }
+    }
+
+    private var groupedEvents: [(String, [TeslaCamEvent])] {
+        var groups: [(String, [TeslaCamEvent])] = []
+        var current: (String, [TeslaCamEvent])?
+
+        for event in events {
+            let key = event.sourceFolder ?? ""
+            if let c = current, c.0 == key {
+                current!.1.append(event)
+            } else {
+                if let c = current {
+                    groups.append(c)
+                }
+                current = (key, [event])
+            }
+        }
+        if let c = current {
+            groups.append(c)
+        }
+        return groups
+    }
+
     var body: some View {
         List(selection: Binding<TeslaCamEvent.ID?>(
             get: { selectedEvent?.id },
@@ -30,9 +55,20 @@ struct SidebarView: View {
                 }
             }
 
-            ForEach(events) { event in
-                EventRow(event: event)
-                    .tag(event.id)
+            if hasSections {
+                ForEach(groupedEvents, id: \.0) { sectionName, sectionEvents in
+                    Section(sectionName) {
+                        ForEach(sectionEvents) { event in
+                            EventRow(event: event)
+                                .tag(event.id)
+                        }
+                    }
+                }
+            } else {
+                ForEach(events) { event in
+                    EventRow(event: event)
+                        .tag(event.id)
+                }
             }
         }
         .listStyle(.sidebar)

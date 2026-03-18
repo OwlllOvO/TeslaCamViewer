@@ -21,7 +21,10 @@ class TeslaCamScanner: ObservableObject {
             for subfolder in subfolders {
                 let subURL = url.appendingPathComponent(subfolder)
                 if fileManager.fileExists(atPath: subURL.path) {
-                    let events = await scanClipsFolder(subURL)
+                    var events = await scanClipsFolder(subURL)
+                    for i in events.indices {
+                        events[i].sourceFolder = subfolder
+                    }
                     allEvents.append(contentsOf: events)
                 }
             }

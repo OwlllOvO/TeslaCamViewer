@@ -75,6 +75,7 @@ struct TeslaCamEvent: Identifiable, Equatable {
     let eventInfo: EventInfo?
     let segments: [ClipSegment]
     let thumbURL: URL?
+    var sourceFolder: String?
 
     var displayName: String {
         let name = folderURL.lastPathComponent
