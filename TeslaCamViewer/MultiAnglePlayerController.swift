@@ -12,6 +12,8 @@ class MultiAnglePlayerController: ObservableObject {
     @Published var globalProgress: TimeInterval = 0
     @Published var globalDuration: TimeInterval = 0
     @Published private(set) var players: [CameraAngle: AVPlayer] = [:]
+    @Published private(set) var detectedFrameRate: Double = 30.0
+    @Published private(set) var frameRateMismatchWarning: String?
 
     private var timeObserver: Any?
     private var observingPlayer: AVPlayer?
@@ -75,6 +77,8 @@ class MultiAnglePlayerController: ObservableObject {
         }
         players = newPlayers
 
+        detectFrameRates(for: segment)
+
         setupTimeObserver()
         currentTime = 0
         totalDuration = segment.duration
@@ -82,6 +86,47 @@ class MultiAnglePlayerController: ObservableObject {
 
         if wasPlaying {
             play()
+        }
+    }
+
+    private static let frameRateMismatchThreshold: Double = 0.5
+
+    private func detectFrameRates(for segment: ClipSegment) {
+        Task {
+            var ratesByAngle: [CameraAngle: Double] = [:]
+
+            for (angle, url) in segment.videos {
+                let asset = AVURLAsset(url: url)
+                do {
+                    let tracks = try await asset.loadTracks(withMediaType: .video)
+                    if let track = tracks.first {
+                        let fps = try await Double(track.load(.nominalFrameRate))
+                        if fps > 0 {
+                            ratesByAngle[angle] = fps
+                        }
+                    }
+                } catch {
+                    continue
+                }
+            }
+
+            guard let minRate = ratesByAngle.values.min(),
+                  let maxRate = ratesByAngle.values.max() else {
+                detectedFrameRate = 30.0
+                frameRateMismatchWarning = nil
+                return
+            }
+
+            detectedFrameRate = maxRate
+
+            if maxRate - minRate > Self.frameRateMismatchThreshold {
+                let details = ratesByAngle.map { "\($0.key.displayName): \(String(format: "%.2f", $0.value)) fps" }
+                    .sorted()
+                    .joined(separator: ", ")
+                frameRateMismatchWarning = "Frame rate mismatch: \(details)"
+            } else {
+                frameRateMismatchWarning = nil
+            }
         }
     }
 
@@ -187,13 +232,13 @@ class MultiAnglePlayerController: ObservableObject {
     }
 
     func stepForward() {
-        let frameTime: TimeInterval = 1.0 / 30.0
+        let frameTime: TimeInterval = 1.0 / detectedFrameRate
         let newGlobal = min(globalProgress + frameTime, globalDuration)
         seekGlobal(to: newGlobal)
     }
 
     func stepBackward() {
-        let frameTime: TimeInterval = 1.0 / 30.0
+        let frameTime: TimeInterval = 1.0 / detectedFrameRate
         let newGlobal = max(globalProgress - frameTime, 0)
         seekGlobal(to: newGlobal)
     }
@@ -229,5 +274,7 @@ class MultiAnglePlayerController: ObservableObject {
         globalDuration = 0
         _eventKeyTimeOffset = nil
         isAdvancing = false
+        detectedFrameRate = 30.0
+        frameRateMismatchWarning = nil
     }
 }

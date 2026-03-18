@@ -8,18 +8,25 @@ struct PlaybackControlsView: View {
 
     var body: some View {
         VStack(spacing: 8) {
+            if let warning = controller.frameRateMismatchWarning {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+            }
+
             HStack(spacing: 8) {
                 Text(formatTime(controller.globalProgress))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 52, alignment: .trailing)
+                    .frame(width: 68, alignment: .trailing)
 
                 progressBar
 
                 Text(formatTime(controller.globalDuration))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .frame(width: 52, alignment: .leading)
+                    .frame(width: 68, alignment: .leading)
             }
             .padding(.horizontal, 16)
 
@@ -201,14 +208,14 @@ struct PlaybackControlsView: View {
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "00:00" }
-        let totalSeconds = Int(seconds)
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
+        guard seconds.isFinite && seconds >= 0 else { return "00:00:00" }
+        let fps = controller.detectedFrameRate
+        let totalFrames = Int(round(seconds * fps))
+        let framesPerSecond = Int(round(fps))
+        let frame = totalFrames % framesPerSecond
+        let totalSeconds = totalFrames / framesPerSecond
+        let minutes = totalSeconds / 60
         let secs = totalSeconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        }
-        return String(format: "%02d:%02d", minutes, secs)
+        return String(format: "%02d:%02d:%02d", minutes, secs, frame)
     }
 }
