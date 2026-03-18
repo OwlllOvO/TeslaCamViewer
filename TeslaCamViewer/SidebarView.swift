@@ -97,8 +97,9 @@ struct EventRow: View {
 
             HStack {
                 if let info = event.eventInfo {
-                    if let city = info.city, let street = info.street {
-                        Text("\(city) \(street)")
+                    let location = [info.city, info.street].compactMap({ $0 }).joined(separator: " ")
+                    if !location.isEmpty {
+                        Text(location)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
