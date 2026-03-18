@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var selectedEvent: TeslaCamEvent?
     @State private var isDragOver = false
     @State private var showInspector = true
+    @State private var keyboardMonitor: Any?
 
     var body: some View {
         NavigationSplitView {
@@ -87,33 +88,53 @@ struct ContentView: View {
         }
         .onDisappear {
             playerController.cleanup()
+            if let monitor = keyboardMonitor {
+                NSEvent.removeMonitor(monitor)
+                keyboardMonitor = nil
+            }
         }
-        .onKeyPress(.space) {
-            playerController.togglePlayback()
-            return .handled
+        .onAppear {
+            installKeyboardMonitor()
         }
-        .onKeyPress(.leftArrow) {
-            playerController.skipBackward(5)
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            playerController.skipForward(5)
-            return .handled
-        }
-        .onKeyPress(",") {
-            playerController.stepBackward()
-            return .handled
-        }
-        .onKeyPress(".") {
-            playerController.stepForward()
-            return .handled
-        }
-        .focusable()
         .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
             handleDrop(providers)
         }
         .onOpenURL { url in
             openURL(url)
+        }
+    }
+
+    private func installKeyboardMonitor() {
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Don't intercept if a text field has focus
+            if let responder = event.window?.firstResponder,
+               responder is NSTextView || responder is NSTextField {
+                return event
+            }
+
+            let shift = event.modifierFlags.contains(.shift)
+
+            switch event.keyCode {
+            case 49: // Space
+                playerController.togglePlayback()
+                return nil
+            case 123: // Left arrow
+                if shift {
+                    playerController.skipBackward(10)
+                } else {
+                    playerController.stepBackward()
+                }
+                return nil
+            case 124: // Right arrow
+                if shift {
+                    playerController.skipForward(10)
+                } else {
+                    playerController.stepForward()
+                }
+                return nil
+            default:
+                return event
+            }
         }
     }
 
