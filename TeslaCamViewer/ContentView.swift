@@ -115,6 +115,12 @@ struct ContentView: View {
             let shift = event.modifierFlags.contains(.shift)
 
             switch event.keyCode {
+            case 53: // Escape
+                if playerController.focusedAngle != nil {
+                    playerController.focusedAngle = nil
+                    return nil
+                }
+                return event
             case 49: // Space
                 playerController.togglePlayback()
                 return nil

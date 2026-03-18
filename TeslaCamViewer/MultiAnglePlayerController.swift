@@ -14,6 +14,7 @@ class MultiAnglePlayerController: ObservableObject {
     @Published private(set) var players: [CameraAngle: AVPlayer] = [:]
     @Published private(set) var detectedFrameRate: Double = 30.0
     @Published private(set) var frameRateMismatchWarning: String?
+    @Published var focusedAngle: CameraAngle?
 
     private var timeObserver: Any?
     private var observingPlayer: AVPlayer?
