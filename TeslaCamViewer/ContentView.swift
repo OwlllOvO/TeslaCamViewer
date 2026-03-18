@@ -18,28 +18,30 @@ struct ContentView: View {
             )
             .frame(minWidth: 220, idealWidth: 280)
         } detail: {
-            if let event = selectedEvent {
-                VStack(spacing: 0) {
-                    MultiAngleVideoGrid(controller: playerController)
-                        .background(.black)
-                        .layoutPriority(1)
+            Group {
+                if let event = selectedEvent {
+                    VStack(spacing: 0) {
+                        MultiAngleVideoGrid(controller: playerController)
+                            .background(.black)
+                            .layoutPriority(1)
 
-                    Divider()
+                        Divider()
 
-                    PlaybackControlsView(controller: playerController, event: event)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ContentUnavailableView {
-                    Label("Tesla Dashcam Viewer", systemImage: "car.side")
-                } description: {
-                    Text("Open a TeslaCam folder or select an event to start viewing.\nYou can also drag a folder here.")
-                } actions: {
-                    Button("Open Folder…") {
-                        openFolder()
+                        PlaybackControlsView(controller: playerController, event: event)
+                    }
+                } else {
+                    ContentUnavailableView {
+                        Label("Tesla Dashcam Viewer", systemImage: "car.side")
+                    } description: {
+                        Text("Open a TeslaCam folder or select an event to start viewing.\nYou can also drag a folder here.")
+                    } actions: {
+                        Button("Open Folder…") {
+                            openFolder()
+                        }
                     }
                 }
             }
+            .frame(minWidth: 320, idealWidth: 640, maxWidth: .infinity, maxHeight: .infinity)
         }
         .inspector(isPresented: $showInspector) {
             if let event = selectedEvent {
