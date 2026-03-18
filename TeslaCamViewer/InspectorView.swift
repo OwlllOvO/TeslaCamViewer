@@ -47,7 +47,7 @@ struct InspectorView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("Files")
+        .navigationTitle(event.folderURL.lastPathComponent)
         .onChange(of: controller.currentSegmentIndex) { _, newIndex in
             selection = event.videoFiles(forSegment: newIndex)
         }
