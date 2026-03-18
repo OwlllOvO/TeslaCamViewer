@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaybackControlsView: View {
     @ObservedObject var controller: MultiAnglePlayerController
+    var event: TeslaCamEvent?
 
     private let speeds: [Float] = [0.5, 1, 2, 4, 8, 16]
 
@@ -22,17 +23,51 @@ struct PlaybackControlsView: View {
             }
             .padding(.horizontal, 16)
 
-            ZStack {
-                transportControls
+            GeometryReader { geo in
+                let sideWidth = max(0, (geo.size.width - 200) / 2)
 
-                HStack {
-                    Spacer()
-                    speedControls
+                ZStack {
+                    transportControls
+
+                    HStack(spacing: 0) {
+                        eventInfoSection
+                            .frame(width: sideWidth, alignment: .leading)
+                            .clipped()
+
+                        Spacer(minLength: 0)
+
+                        speedControls
+                    }
                 }
+                .frame(width: geo.size.width, height: geo.size.height)
             }
+            .frame(height: 44)
             .padding(.horizontal, 16)
         }
         .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private var eventInfoSection: some View {
+        if let info = event?.eventInfo {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 12) {
+                    if let city = info.city {
+                        Label(city, systemImage: "building.2")
+                    }
+                    if let street = info.street {
+                        Label(street, systemImage: "road.lanes")
+                    }
+                    if let lat = info.est_lat, let lon = info.est_lon {
+                        Label("\(lat), \(lon)", systemImage: "location")
+                    }
+                }
+                Label(info.reasonDisplayName, systemImage: "exclamationmark.triangle")
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
     }
 
     private var progressBar: some View {

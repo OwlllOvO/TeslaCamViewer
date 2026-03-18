@@ -26,9 +26,7 @@ struct ContentView: View {
 
                     Divider()
 
-                    PlaybackControlsView(controller: playerController)
-
-                    EventInfoView(event: event)
+                    PlaybackControlsView(controller: playerController, event: event)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
