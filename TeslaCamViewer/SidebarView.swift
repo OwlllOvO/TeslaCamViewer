@@ -61,6 +61,9 @@ struct SidebarView: View {
                         ForEach(sectionEvents) { event in
                             EventRow(event: event)
                                 .tag(event.id)
+                                .contextMenu {
+                                    eventContextMenu(for: event)
+                                }
                         }
                     }
                 }
@@ -68,11 +71,20 @@ struct SidebarView: View {
                 ForEach(events) { event in
                     EventRow(event: event)
                         .tag(event.id)
+                        .contextMenu {
+                            eventContextMenu(for: event)
+                        }
                 }
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("Events")
+    }
+
+    private func eventContextMenu(for event: TeslaCamEvent) -> some View {
+        Button("Reveal in Finder") {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: event.folderURL.path)
+        }
     }
 }
 
