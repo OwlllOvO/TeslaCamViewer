@@ -36,7 +36,7 @@ struct PlaybackControlsView: View {
 
                         Spacer(minLength: 0)
 
-                        speedControls
+                        speedControls(maxWidth: sideWidth)
                     }
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
@@ -158,9 +158,23 @@ struct PlaybackControlsView: View {
         .help(help)
     }
 
-    private var speedControls: some View {
-        HStack(spacing: 3) {
-            ForEach(speeds, id: \.self) { speed in
+    private static let speedButtonWidth: CGFloat = 40
+    private static let speedButtonSpacing: CGFloat = 3
+
+    private func visibleSpeeds(maxWidth: CGFloat) -> [Float] {
+        let count = max(0, Int((maxWidth + Self.speedButtonSpacing) / (Self.speedButtonWidth + Self.speedButtonSpacing)))
+        guard count > 0 else { return [] }
+        let oneXIndex = speeds.firstIndex(of: 1) ?? 0
+        if count > oneXIndex {
+            return Array(speeds.prefix(count))
+        }
+        return Array(speeds.suffix(from: oneXIndex).prefix(count))
+    }
+
+    private func speedControls(maxWidth: CGFloat) -> some View {
+        let visible = visibleSpeeds(maxWidth: maxWidth)
+        return HStack(spacing: Self.speedButtonSpacing) {
+            ForEach(visible, id: \.self) { speed in
                 Button(action: { controller.setRate(speed) }) {
                     Text(speedLabel(speed))
                         .font(.system(.caption, design: .monospaced, weight: .medium))
