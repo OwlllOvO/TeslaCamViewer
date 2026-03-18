@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var playerController = MultiAnglePlayerController()
     @State private var selectedEvent: TeslaCamEvent?
     @State private var isDragOver = false
+    @State private var showInspector = true
 
     var body: some View {
         NavigationSplitView {
@@ -41,12 +42,32 @@ struct ContentView: View {
                 }
             }
         }
+        .inspector(isPresented: $showInspector) {
+            if let event = selectedEvent {
+                InspectorView(
+                    event: event,
+                    controller: playerController,
+                    onFileSelected: { file in
+                        playerController.loadSegment(at: file.segmentIndex)
+                    }
+                )
+                .inspectorColumnWidth(min: 200, ideal: 240, max: 360)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: openFolder) {
                     Label("Open Folder", systemImage: "folder")
                 }
                 .help("Open TeslaCam Folder")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showInspector.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.trailing")
+                }
+                .help("Toggle Inspector")
             }
         }
         .overlay {

@@ -18,6 +18,7 @@
 		AA000009 /* EventInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000009; };
 		AA000010 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010; };
 		AA000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000011; };
+		AA000012 /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -34,6 +35,7 @@
 		AB000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AB000013 /* TeslaCamViewer.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TeslaCamViewer.entitlements; sourceTree = "<group>"; };
+		AB000014 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
 		AC000001 /* TeslaCamViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TeslaCamViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -69,6 +71,7 @@
 				AB000008 /* PlaybackControlsView.swift */,
 				AB000009 /* EventInfoView.swift */,
 				AB000010 /* SidebarView.swift */,
+				AB000014 /* InspectorView.swift */,
 				AB000011 /* Assets.xcassets */,
 				AB000012 /* Info.plist */,
 				AB000013 /* TeslaCamViewer.entitlements */,
@@ -158,6 +161,7 @@
 				AA000008 /* PlaybackControlsView.swift in Sources */,
 				AA000009 /* EventInfoView.swift in Sources */,
 				AA000010 /* SidebarView.swift in Sources */,
+				AA000012 /* InspectorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

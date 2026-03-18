@@ -52,6 +52,23 @@ struct EventInfo: Codable, Equatable {
     }
 }
 
+struct VideoFile: Identifiable, Hashable {
+    let id: String
+    let url: URL
+    let angle: CameraAngle
+    let segmentIndex: Int
+
+    var fileName: String { url.lastPathComponent }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    static func == (lhs: VideoFile, rhs: VideoFile) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 struct ClipSegment: Identifiable, Equatable {
     let id = UUID()
     let timestamp: Date
@@ -62,6 +79,10 @@ struct ClipSegment: Identifiable, Equatable {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: timestamp)
+    }
+
+    var sortedFileNames: [String] {
+        videos.values.map(\.lastPathComponent).sorted()
     }
 
     static func == (lhs: ClipSegment, rhs: ClipSegment) -> Bool {
@@ -95,6 +116,30 @@ struct TeslaCamEvent: Identifiable, Equatable {
 
     var startTime: Date? {
         segments.first?.timestamp
+    }
+
+    var allVideoFiles: [VideoFile] {
+        var files: [VideoFile] = []
+        for (segIdx, segment) in segments.enumerated() {
+            for angle in CameraAngle.allCases {
+                if let url = segment.videos[angle] {
+                    files.append(VideoFile(
+                        id: "\(segIdx)-\(angle.rawValue)",
+                        url: url,
+                        angle: angle,
+                        segmentIndex: segIdx
+                    ))
+                }
+            }
+        }
+        return files
+    }
+
+    func videoFiles(forSegment index: Int) -> Set<String> {
+        guard segments.indices.contains(index) else { return [] }
+        return Set(CameraAngle.allCases.compactMap { angle in
+            segments[index].videos[angle] != nil ? "\(index)-\(angle.rawValue)" : nil
+        })
     }
 
     static func == (lhs: TeslaCamEvent, rhs: TeslaCamEvent) -> Bool {
