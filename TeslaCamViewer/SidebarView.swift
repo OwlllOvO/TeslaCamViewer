@@ -9,25 +9,18 @@ struct SidebarView: View {
         events.contains { $0.sourceFolder != nil }
     }
 
-    private var groupedEvents: [(String, [TeslaCamEvent])] {
-        var groups: [(String, [TeslaCamEvent])] = []
-        var current: (String, [TeslaCamEvent])?
+    private static let sectionOrder = ["SentryClips", "SavedClips", "RecentClips"]
 
+    private var groupedEvents: [(String, [TeslaCamEvent])] {
+        var dict: [String: [TeslaCamEvent]] = [:]
         for event in events {
             let key = event.sourceFolder ?? ""
-            if let c = current, c.0 == key {
-                current!.1.append(event)
-            } else {
-                if let c = current {
-                    groups.append(c)
-                }
-                current = (key, [event])
-            }
+            dict[key, default: []].append(event)
         }
-        if let c = current {
-            groups.append(c)
+        return Self.sectionOrder.compactMap { key in
+            guard let group = dict[key], !group.isEmpty else { return nil }
+            return (key, group)
         }
-        return groups
     }
 
     var body: some View {
