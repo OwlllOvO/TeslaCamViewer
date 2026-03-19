@@ -1,35 +1,68 @@
-# Swift Package Manager
-.build/
-.swiftpm/
-*.xcodeproj
-*.xcworkspace
-
-# App bundle (built artifact)
-TeslaCamViewer.app/
-
-# macOS
-.DS_Store
-*.xcuserstate
-
-# Build artifacts
-DerivedData/
-build/
-
-# Compiled files
-*.o
-*.swiftmodule
-*.swiftdoc
-
-# Test videos (don't commit large video files)
-test_videos/
-sample_data/
-*.mp4
-*.mov
-
 # Xcode
-xcuserdata/
-*.xcscmblueprint
+#
+build/
+DerivedData/
+Index.noindex/
+*.xcworkspace
+*.xcuserdata/
+*.xccheckout
+*.xcodeproj/project.xcworkspace/
+*.xcodeproj/xcuserdata/
 
-# Other
-.vscode/
-.idea/
+# Swift Package Manager
+#
+.build/
+Packages/
+.swiftpm/xcode/package.xcworkspace/
+.swiftpm/xcode/checked-out-packages/
+.swift-version
+Package.resolved
+
+# CocoaPods
+#
+Pods/
+podfile.lock
+
+# Carthage
+#
+Carthage/Build/
+
+# Fastlane
+#
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/*.png
+fastlane/test_output/
+
+# Xcode Server
+#
+.xcscheme
+
+# Playgrounds
+#
+timeline.xctimeline
+playground.xcworkspace
+
+# User settings
+#
+*.xcuserstate
+*.xccheckout
+
+# Certificates and provisioning profiles
+#
+*.mobileprovision
+*.p12
+
+# Archive
+#
+*.xcarchive
+
+# Logs
+#
+*.log
+
+# Misc
+#
+.DS_Store
+*.swp
+*.lock
