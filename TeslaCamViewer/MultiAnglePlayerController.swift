@@ -21,6 +21,10 @@ class MultiAnglePlayerController: ObservableObject {
     private var segments: [ClipSegment] = []
     private var segmentOffsets: [TimeInterval] = []
     private var isAdvancing = false
+    private var endOfItemObservers: [NSObjectProtocol] = []
+    private var finishedPlayers: Set<CameraAngle> = []
+    private var playerDurations: [CameraAngle: TimeInterval] = [:]
+    private var longestAngle: CameraAngle?
 
     var currentSegment: ClipSegment? {
         guard segments.indices.contains(currentSegmentIndex) else { return nil }
@@ -73,12 +77,14 @@ class MultiAnglePlayerController: ObservableObject {
             if let url = segment.videos[angle] {
                 let player = AVPlayer(url: url)
                 player.volume = angle == .front ? 1.0 : 0.0
+                player.actionAtItemEnd = .pause
                 newPlayers[angle] = player
             }
         }
         players = newPlayers
 
         detectFrameRates(for: segment)
+        loadPlayerDurations(for: segment)
 
         setupTimeObserver()
         currentTime = 0
@@ -137,14 +143,71 @@ class MultiAnglePlayerController: ObservableObject {
         }
         timeObserver = nil
         observingPlayer = nil
+        removeEndOfItemObservers()
     }
 
     private func setupTimeObserver() {
-        guard let frontPlayer = players[.front] else { return }
+        playerDurations = [:]
+        finishedPlayers = []
+        longestAngle = players.keys.contains(.front) ? .front : players.keys.first
 
+        guard let primary = longestAngle, let primaryPlayer = players[primary] else { return }
+
+        setupTimeObserverOn(primaryPlayer)
+        setupEndOfItemObservers()
+    }
+
+    private func loadPlayerDurations(for segment: ClipSegment) {
+        let currentIdx = currentSegmentIndex
+        Task {
+            var durations: [CameraAngle: TimeInterval] = [:]
+
+            for (angle, url) in segment.videos {
+                let asset = AVURLAsset(url: url)
+                do {
+                    let duration = try await asset.load(.duration)
+                    let seconds = CMTimeGetSeconds(duration)
+                    if seconds.isFinite && seconds > 0 {
+                        durations[angle] = seconds
+                    }
+                } catch {
+                    continue
+                }
+            }
+
+            guard self.currentSegmentIndex == currentIdx else { return }
+
+            self.playerDurations = durations
+
+            var maxDur: TimeInterval = 0
+            var longest: CameraAngle?
+            for (angle, dur) in durations {
+                if dur > maxDur {
+                    maxDur = dur
+                    longest = angle
+                }
+            }
+
+            if let longest {
+                let previousLongest = self.longestAngle
+                self.longestAngle = longest
+
+                if previousLongest != longest, let player = self.players[longest] {
+                    self.removeTimeObserver()
+                    self.setupTimeObserverOn(player)
+                    self.setupEndOfItemObservers()
+                    if self.isPlaying {
+                        player.rate = self.playbackRate
+                    }
+                }
+            }
+        }
+    }
+
+    private func setupTimeObserverOn(_ player: AVPlayer) {
         let interval = CMTime(seconds: 1.0 / 30.0, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        observingPlayer = frontPlayer
-        timeObserver = frontPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        observingPlayer = player
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor in
                 guard let self, !self.isAdvancing else { return }
                 let seconds = CMTimeGetSeconds(time)
@@ -158,6 +221,38 @@ class MultiAnglePlayerController: ObservableObject {
                 }
             }
         }
+    }
+
+    private func setupEndOfItemObservers() {
+        for (angle, player) in players {
+            guard let item = player.currentItem else { continue }
+            if angle == longestAngle { continue }
+
+            let observer = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self, angle] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.finishedPlayers.insert(angle)
+                    // Seek back to the last frame so the player shows its final image
+                    if let dur = self.playerDurations[angle] {
+                        let lastFrame = CMTime(seconds: dur - 0.01, preferredTimescale: 600)
+                        self.players[angle]?.seek(to: lastFrame, toleranceBefore: .zero, toleranceAfter: .zero)
+                    }
+                }
+            }
+            endOfItemObservers.append(observer)
+        }
+    }
+
+    private func removeEndOfItemObservers() {
+        for observer in endOfItemObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        endOfItemObservers.removeAll()
+        finishedPlayers.removeAll()
     }
 
     private func updateGlobalProgress() {
@@ -174,7 +269,6 @@ class MultiAnglePlayerController: ObservableObject {
         let nextIndex = currentSegmentIndex + 1
         if nextIndex < segments.count {
             loadSegment(at: nextIndex)
-            play()
         } else {
             pause()
             currentTime = totalDuration
@@ -184,9 +278,17 @@ class MultiAnglePlayerController: ObservableObject {
 
     func play() {
         let targetTime = CMTime(seconds: currentTime, preferredTimescale: 600)
-        for (_, player) in players {
-            player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            player.rate = playbackRate
+        for (angle, player) in players {
+            let angleDur = playerDurations[angle] ?? totalDuration
+            if currentTime >= angleDur - 0.05 {
+                let lastFrame = CMTime(seconds: angleDur - 0.01, preferredTimescale: 600)
+                player.seek(to: lastFrame, toleranceBefore: .zero, toleranceAfter: .zero)
+                player.pause()
+                finishedPlayers.insert(angle)
+            } else {
+                player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                player.rate = playbackRate
+            }
         }
         isPlaying = true
     }
@@ -208,9 +310,17 @@ class MultiAnglePlayerController: ObservableObject {
 
     func seek(to time: TimeInterval) {
         let clampedTime = max(0, min(time, totalDuration))
-        let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
-        for (_, player) in players {
-            player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+        finishedPlayers.removeAll()
+        for (angle, player) in players {
+            let angleDur = playerDurations[angle] ?? totalDuration
+            if clampedTime >= angleDur - 0.05 {
+                let lastFrame = CMTime(seconds: angleDur - 0.01, preferredTimescale: 600)
+                player.seek(to: lastFrame, toleranceBefore: .zero, toleranceAfter: .zero)
+                finishedPlayers.insert(angle)
+            } else {
+                let cmTime = CMTime(seconds: clampedTime, preferredTimescale: 600)
+                player.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            }
         }
         currentTime = clampedTime
         updateGlobalProgress()
@@ -257,8 +367,10 @@ class MultiAnglePlayerController: ObservableObject {
     func setRate(_ rate: Float) {
         playbackRate = rate
         if isPlaying {
-            for (_, player) in players {
-                player.rate = rate
+            for (angle, player) in players {
+                if !finishedPlayers.contains(angle) {
+                    player.rate = rate
+                }
             }
         }
     }
@@ -277,5 +389,8 @@ class MultiAnglePlayerController: ObservableObject {
         isAdvancing = false
         detectedFrameRate = 30.0
         frameRateMismatchWarning = nil
+        playerDurations = [:]
+        longestAngle = nil
+        finishedPlayers = []
     }
 }

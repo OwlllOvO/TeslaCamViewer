@@ -116,7 +116,7 @@ class TeslaCamScanner: ObservableObject {
         var segments: [ClipSegment] = []
 
         for (timestamp, videos) in segmentGroups.sorted(by: { $0.key < $1.key }) {
-            let duration = await getVideoDuration(videos.values.first)
+            let duration = await getMaxVideoDuration(videos)
             segments.append(ClipSegment(
                 timestamp: timestamp,
                 videos: videos,
@@ -170,15 +170,20 @@ class TeslaCamScanner: ObservableObject {
         return groups
     }
 
-    private func getVideoDuration(_ url: URL?) async -> TimeInterval {
-        guard let url else { return 60.0 }
-        let asset = AVURLAsset(url: url)
-        do {
-            let duration = try await asset.load(.duration)
-            let seconds = CMTimeGetSeconds(duration)
-            return seconds.isFinite ? seconds : 60.0
-        } catch {
-            return 60.0
+    private func getMaxVideoDuration(_ videos: [CameraAngle: URL]) async -> TimeInterval {
+        var maxDuration: TimeInterval = 0
+        for (_, url) in videos {
+            let asset = AVURLAsset(url: url)
+            do {
+                let duration = try await asset.load(.duration)
+                let seconds = CMTimeGetSeconds(duration)
+                if seconds.isFinite {
+                    maxDuration = max(maxDuration, seconds)
+                }
+            } catch {
+                continue
+            }
         }
+        return maxDuration > 0 ? maxDuration : 60.0
     }
 }
