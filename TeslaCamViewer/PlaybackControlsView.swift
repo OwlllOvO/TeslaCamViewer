@@ -167,9 +167,18 @@ struct PlaybackControlsView: View {
 
     private static let speedButtonWidth: CGFloat = 40
     private static let speedButtonSpacing: CGFloat = 3
+    private static let jumpButtonWidth: CGFloat = 105
+
+    private var hasJumpButton: Bool {
+        controller.eventKeyTimeOffset != nil
+    }
 
     private func visibleSpeeds(maxWidth: CGFloat) -> [Float] {
-        let count = max(0, Int((maxWidth + Self.speedButtonSpacing) / (Self.speedButtonWidth + Self.speedButtonSpacing)))
+        var available = maxWidth
+        if hasJumpButton {
+            available -= Self.jumpButtonWidth + Self.speedButtonSpacing
+        }
+        let count = max(0, Int((available + Self.speedButtonSpacing) / (Self.speedButtonWidth + Self.speedButtonSpacing)))
         guard count > 0 else { return [] }
         let oneXIndex = speeds.firstIndex(of: 1) ?? 0
         if count > oneXIndex {
@@ -181,6 +190,23 @@ struct PlaybackControlsView: View {
     private func speedControls(maxWidth: CGFloat) -> some View {
         let visible = visibleSpeeds(maxWidth: maxWidth)
         return HStack(spacing: Self.speedButtonSpacing) {
+            if let keyOffset = controller.eventKeyTimeOffset {
+                Button {
+                    let target = max(0, keyOffset - 10)
+                    controller.seekGlobal(to: target)
+                } label: {
+                    Text("Jump to Event")
+                        .font(.system(.caption, design: .monospaced, weight: .medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.red)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help("Jump to 10 seconds before the event")
+            }
+
             ForEach(visible, id: \.self) { speed in
                 Button(action: { controller.setRate(speed) }) {
                     Text(speedLabel(speed))
