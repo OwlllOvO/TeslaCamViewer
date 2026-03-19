@@ -21,9 +21,11 @@ struct ContentView: View {
             Group {
                 if let event = selectedEvent {
                     VStack(spacing: 0) {
-                        MultiAngleVideoGrid(controller: playerController)
-                            .background(.black)
-                            .layoutPriority(1)
+                        ZStack {
+                            Color.black
+                            MultiAngleVideoGrid(controller: playerController)
+                        }
+                        .layoutPriority(1)
 
                         Divider()
 
