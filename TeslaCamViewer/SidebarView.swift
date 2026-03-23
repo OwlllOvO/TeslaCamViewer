@@ -4,6 +4,7 @@ struct SidebarView: View {
     let events: [TeslaCamEvent]
     @Binding var selectedEvent: TeslaCamEvent?
     let isLoading: Bool
+    var onMoveToTrash: ((TeslaCamEvent) -> Void)?
 
     private var hasSections: Bool {
         events.contains { $0.sourceFolder != nil }
@@ -74,9 +75,16 @@ struct SidebarView: View {
         .navigationTitle("Events")
     }
 
+    @ViewBuilder
     private func eventContextMenu(for event: TeslaCamEvent) -> some View {
         Button("Reveal in Finder") {
-            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: event.folderURL.path)
+            NSWorkspace.shared.activateFileViewerSelecting([event.folderURL])
+        }
+
+        Divider()
+
+        Button("Move to Trash", role: .destructive) {
+            onMoveToTrash?(event)
         }
     }
 }

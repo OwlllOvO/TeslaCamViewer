@@ -42,6 +42,11 @@ struct InspectorView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .tag(file.id)
+                            .contextMenu {
+                                Button("Reveal in Finder") {
+                                    NSWorkspace.shared.activateFileViewerSelecting([file.url])
+                                }
+                            }
                     }
                 }
             }

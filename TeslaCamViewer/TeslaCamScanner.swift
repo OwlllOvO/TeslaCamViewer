@@ -8,6 +8,10 @@ class TeslaCamScanner: ObservableObject {
 
     private let fileManager = FileManager.default
 
+    func removeEvent(_ event: TeslaCamEvent) {
+        events.removeAll { $0.id == event.id }
+    }
+
     func scanDirectory(_ url: URL) async {
         isLoading = true
         defer { isLoading = false }

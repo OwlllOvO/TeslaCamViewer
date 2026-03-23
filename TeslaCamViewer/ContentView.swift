@@ -14,7 +14,8 @@ struct ContentView: View {
             SidebarView(
                 events: scanner.events,
                 selectedEvent: $selectedEvent,
-                isLoading: scanner.isLoading
+                isLoading: scanner.isLoading,
+                onMoveToTrash: moveEventToTrash
             )
             .frame(minWidth: 220, idealWidth: 280)
         } detail: {
@@ -106,17 +107,39 @@ struct ContentView: View {
         }
     }
 
+    private func moveEventToTrash(_ event: TeslaCamEvent) {
+        do {
+            try FileManager.default.trashItem(at: event.folderURL, resultingItemURL: nil)
+            if selectedEvent?.id == event.id {
+                selectedEvent = nil
+                playerController.cleanup()
+            }
+            scanner.removeEvent(event)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Failed to Move to Trash"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+    }
+
     private func installKeyboardMonitor() {
         keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            // Don't intercept if a text field has focus
             if let responder = event.window?.firstResponder,
                responder is NSTextView || responder is NSTextField {
                 return event
             }
 
             let shift = event.modifierFlags.contains(.shift)
+            let command = event.modifierFlags.contains(.command)
 
             switch event.keyCode {
+            case 51 where command: // Command+Delete
+                if let selected = selectedEvent {
+                    moveEventToTrash(selected)
+                }
+                return nil
             case 53: // Escape
                 if playerController.focusedAngle != nil {
                     playerController.focusedAngle = nil
