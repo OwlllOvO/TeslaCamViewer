@@ -7,9 +7,20 @@ class TeslaCamScanner: ObservableObject {
     @Published var isLoading = false
 
     private let fileManager = FileManager.default
+    private var watchedURL: URL?
+    private var directoryWatcher: DirectoryWatcher?
+    private var rescanTask: Task<Void, Never>?
 
     func removeEvent(_ event: TeslaCamEvent) {
         events.removeAll { $0.id == event.id }
+    }
+
+    func stopWatching() {
+        directoryWatcher?.stop()
+        directoryWatcher = nil
+        rescanTask?.cancel()
+        rescanTask = nil
+        watchedURL = nil
     }
 
     func scanDirectory(_ url: URL) async {
@@ -41,6 +52,74 @@ class TeslaCamScanner: ObservableObject {
         }
 
         events = allEvents.sorted { ($0.startTime ?? .distantPast) < ($1.startTime ?? .distantPast) }
+
+        startWatching(url)
+    }
+
+    private func startWatching(_ url: URL) {
+        stopWatching()
+        watchedURL = url
+
+        let folderType = detectFolderType(url)
+        var pathsToWatch: [String] = [url.path]
+
+        if folderType == .teslaCam {
+            for subfolder in ["RecentClips", "SavedClips", "SentryClips"] {
+                let subURL = url.appendingPathComponent(subfolder)
+                if fileManager.fileExists(atPath: subURL.path) {
+                    pathsToWatch.append(subURL.path)
+                }
+            }
+        }
+
+        directoryWatcher = DirectoryWatcher(paths: pathsToWatch) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.scheduleRescan()
+            }
+        }
+        directoryWatcher?.start()
+    }
+
+    private func scheduleRescan() {
+        rescanTask?.cancel()
+        rescanTask = Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, let url = watchedURL else { return }
+            await rescanDirectory(url)
+        }
+    }
+
+    private func rescanDirectory(_ url: URL) async {
+        let folderType = detectFolderType(url)
+        var allEvents: [TeslaCamEvent] = []
+
+        switch folderType {
+        case .teslaCam:
+            let subfolders = ["RecentClips", "SavedClips", "SentryClips"]
+            for subfolder in subfolders {
+                let subURL = url.appendingPathComponent(subfolder)
+                if fileManager.fileExists(atPath: subURL.path) {
+                    var events = await scanClipsFolder(subURL)
+                    for i in events.indices {
+                        events[i].sourceFolder = subfolder
+                    }
+                    allEvents.append(contentsOf: events)
+                }
+            }
+        case .recentClips, .sentryClips, .savedClips:
+            allEvents = await scanClipsFolder(url)
+        case .singleEvent:
+            if let event = await scanEventFolder(url) {
+                allEvents.append(event)
+            }
+        }
+
+        let newEvents = allEvents.sorted { ($0.startTime ?? .distantPast) < ($1.startTime ?? .distantPast) }
+        let oldPaths = Set(events.map(\.folderURL.path))
+        let newPaths = Set(newEvents.map(\.folderURL.path))
+        if oldPaths != newPaths {
+            events = newEvents
+        }
     }
 
     private func detectFolderType(_ url: URL) -> FolderType {
@@ -189,5 +268,74 @@ class TeslaCamScanner: ObservableObject {
             }
         }
         return maxDuration > 0 ? maxDuration : 60.0
+    }
+}
+
+// MARK: - FSEvents-based directory watcher
+
+private final class DirectoryWatcher: @unchecked Sendable {
+    private let paths: [String]
+    private let onChange: () -> Void
+    private var stream: FSEventStreamRef?
+
+    init(paths: [String], onChange: @escaping () -> Void) {
+        self.paths = paths
+        self.onChange = onChange
+    }
+
+    func start() {
+        guard stream == nil else { return }
+
+        let context = Unmanaged.passRetained(CallbackBox(onChange)).toOpaque()
+
+        var ctx = FSEventStreamContext(
+            version: 0,
+            info: context,
+            retain: nil,
+            release: nil,
+            copyDescription: nil
+        )
+
+        let pathsCF = paths as CFArray
+
+        guard let eventStream = FSEventStreamCreate(
+            nil,
+            DirectoryWatcher.fsEventCallback,
+            &ctx,
+            pathsCF,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            0.3,
+            UInt32(kFSEventStreamCreateFlagUseCFTypes | kFSEventStreamCreateFlagFileEvents)
+        ) else { return }
+
+        stream = eventStream
+        FSEventStreamSetDispatchQueue(eventStream, .main)
+        FSEventStreamStart(eventStream)
+    }
+
+    func stop() {
+        guard let eventStream = stream else { return }
+        FSEventStreamStop(eventStream)
+        FSEventStreamInvalidate(eventStream)
+        FSEventStreamRelease(eventStream)
+        stream = nil
+    }
+
+    deinit {
+        stop()
+    }
+
+    private static let fsEventCallback: FSEventStreamCallback = {
+        _, clientCallBackInfo, _, _, _, _ in
+        guard let info = clientCallBackInfo else { return }
+        let box = Unmanaged<CallbackBox>.fromOpaque(info).takeUnretainedValue()
+        box.handler()
+    }
+
+    private final class CallbackBox {
+        let handler: () -> Void
+        init(_ handler: @escaping () -> Void) {
+            self.handler = handler
+        }
     }
 }

@@ -91,6 +91,7 @@ struct ContentView: View {
         }
         .onDisappear {
             playerController.cleanup()
+            scanner.stopWatching()
             if let monitor = keyboardMonitor {
                 NSEvent.removeMonitor(monitor)
                 keyboardMonitor = nil
