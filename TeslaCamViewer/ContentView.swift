@@ -55,6 +55,7 @@ struct ContentView: View {
                         playerController.loadSegment(at: file.segmentIndex)
                     }
                 )
+                .id(event.id)
                 .inspectorColumnWidth(min: 200, ideal: 240, max: 360)
             }
         }
