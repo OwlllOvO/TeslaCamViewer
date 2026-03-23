@@ -2,7 +2,7 @@
 
 A native macOS application built with SwiftUI for viewing Tesla Dashcam and Sentry Mode videos. Watch multiple camera angles simultaneously with synchronized playback and easily navigate through your saved events.
 
-![App Screenshot](./images/app-screenshot.png)
+![App Screenshot](./images/app-screenshot.webp)
 
 ## Features
 
@@ -21,7 +21,7 @@ A native macOS application built with SwiftUI for viewing Tesla Dashcam and Sent
 
 Click any camera view to zoom:
 
-![Zoom single view](./images/zoom-single-view.png)
+![Zoom single view](./images/zoom-single-view.webp)
 
 ## Building from Source
 
