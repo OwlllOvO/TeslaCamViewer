@@ -31,6 +31,11 @@ class MultiAnglePlayerController: ObservableObject {
         return segments[currentSegmentIndex]
     }
 
+    var currentRealWorldDate: Date? {
+        guard let segment = currentSegment else { return nil }
+        return segment.timestamp.addingTimeInterval(currentTime)
+    }
+
     var eventKeyTimeOffset: TimeInterval? {
         return _eventKeyTimeOffset
     }

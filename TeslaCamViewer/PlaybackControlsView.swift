@@ -6,12 +6,26 @@ struct PlaybackControlsView: View {
 
     private let speeds: [Float] = [0.5, 1, 2, 4, 8, 16]
 
+    private static let realWorldDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     var body: some View {
         VStack(spacing: 8) {
             if let warning = controller.frameRateMismatchWarning {
                 Label(warning, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+            }
+
+            if let realDate = controller.currentRealWorldDate {
+                Text(Self.realWorldDateFormatter.string(from: realDate))
+                    .font(.system(.caption, design: .monospaced, weight: .medium))
+                    .foregroundStyle(.primary)
                     .padding(.horizontal, 16)
             }
 
